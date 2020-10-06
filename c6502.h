@@ -124,7 +124,7 @@ private:
     uint8_t read(uint16_t a);
     void write(uint16_t a, uint8_t d);
 
-    uint16_t GetFlag(FLAGS6502 f);
+    uint8_t GetFlag(FLAGS6502 f);
     void SetFlag(FLAGS6502 f, bool v);
 
     struct INSTRUCTION {

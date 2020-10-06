@@ -31,3 +31,47 @@ uint8_t c6502::read(uint16_t a) {
 void c6502::write(uint16_t a, uint8_t d) {
     bus->write(a, d);
 }
+
+void c6502::clock() {
+	if (cycles == 0) {
+		opcode = read(pc);
+		pc++;
+
+		cycles = lookup[opcode].cycles;
+
+		// dereference and execute addr mode and operation
+		uint8_t additional_cycle1 = (this->*lookup[opcode].addrmode)();
+		uint8_t additional_cycle2 = (this->*lookup[opcode].operate)();
+
+		cycles += (additional_cycle1 & additional_cycle2);
+	}
+
+	cycles--;
+}
+
+uint8_t c6502::GetFlag(FLAGS6502 f) {
+	return ((status & f) > 0) ? 1 : 0;
+}
+
+void c6502::SetFlag(FLAGS6502 f, bool v) {
+	if (v)
+		status |= f;
+	else
+		status &= ~f;
+}
+
+// Addressing modes
+uint8_t c6502::IMP() {
+	fetched = a;
+	return 0;
+}
+uint8_t c6502::IMM() {
+	addr_abs = pc++;
+	return 0;
+}
+uint8_t c6502::ZP0() {
+	addr_abs = read(pc);
+	pc++;
+	addr_abs &= 0x00FF;
+	return 0;
+}
