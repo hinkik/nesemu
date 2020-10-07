@@ -62,16 +62,115 @@ void c6502::SetFlag(FLAGS6502 f, bool v) {
 
 // Addressing modes
 uint8_t c6502::IMP() {
+	// Implied addressing
+	// Do nothing but sometimes uses acc
 	fetched = a;
 	return 0;
 }
 uint8_t c6502::IMM() {
+	// Immediate mode
+	// Uses the next byte as a literal
+	// therefore the addr is just the next byte in program code
 	addr_abs = pc++;
 	return 0;
 }
 uint8_t c6502::ZP0() {
+	// Zero page addressing
+	// the next byte should become $00XX basically
 	addr_abs = read(pc);
 	pc++;
 	addr_abs &= 0x00FF;
+	return 0;
+}
+uint8_t c6502::ZPX() {
+	// Zero page X addressing
+	addr_abs = read(pc + x);
+	pc++;
+	addr_abs &= 0x00FF;
+	return 0;
+}
+uint8_t c6502::ZPX() {
+	// Zero page Y addressing
+	addr_abs = read(pc + y);
+	pc++;
+	addr_abs &= 0x00FF;
+	return 0;
+}
+uint8_t c6502::ABS() {
+	uint16_t lowb = read(pc);
+	pc++;
+	uint16_t highb = read(pc);
+	pc++;
+	addr_abs = (highb << 8) | lowb;
+	return 0;
+}
+uint8_t c6502::ABX() {
+	uint16_t lowb = read(pc);
+	pc++;
+	uint16_t highb = read(pc);
+	pc++;
+	addr_abs = (highb << 8) | lowb;
+	addr_abs += x;
+	if ((addr_abs & 0xFF00) != (highb << 8)) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+uint8_t c6502::ABY() {
+	uint16_t lowb = read(pc);
+	pc++;
+	uint16_t highb = read(pc);
+	pc++;
+	addr_abs = (highb << 8) | lowb;
+	addr_abs += y;
+	if ((addr_abs & 0xFF00) != (highb << 8)) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+uint8_t c6502::IND() {
+	uint16_t ilowb = read(pc);
+	pc++;
+	uint16_t ihighb = read(pc);
+	pc++;
+	uint16_t ptr = (ihighb << 8) | ilowb;
+	
+	// Simulate a hardware bug
+	if (ilowb = 0x00FF) {
+		addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr);
+	} else {
+		addr_abs = (read(ptr + 1) << 8) | read(ptr);
+	}
+	return 0;
+}
+uint8_t c6502::IZX() {
+	uint16_t t = read(pc);
+	pc++;
+	uint16_t lo = read((uint16_t)(t + (uint16_t)x) & 0x00FF);
+	uint16_t hi = read((uint16_t)(t + (uint16_t)x + 1) & 0x00FF);
+	addr_abs = (hi << 8) | lo;
+	return 0;
+}
+uint8_t c6502::IZY() {
+	uint16_t t = read(pc);
+	pc++;
+	uint16_t lo = read(t & 0x00FF);
+	uint16_t hi = read((t + 1) & 0x00FF);
+	addr_abs = (hi << 8) | lo;
+	addr_abs += y;
+	if ((addr_abs & 0xFF00) != (hi << 8)) {
+		return 1;
+	} else {
+		return 0;
+	}
+}
+uint8_t c6502::REL() {
+	// check this again...
+	addr_rel = read(pc);
+	pc++;
+	if (addr_rel & 0x80)
+		addr_rel |= 0xFF00;
 	return 0;
 }
