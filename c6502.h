@@ -87,6 +87,9 @@ public:
 
     uint8_t XXX();
 
+    // Helper functions
+    void branch();
+
     void clock();
     void reset();
     void irq();
@@ -104,12 +107,12 @@ public:
     enum FLAGS6502 {
         C = (1 << 0), // carry bit
         Z = (1 << 1), // zero
-        I = (1 << 0), // disable interrupts
-        D = (1 << 0), // decimal mode
-        B = (1 << 0), // break
-        U = (1 << 0), // unused
-        V = (1 << 0), // overflow
-        N = (1 << 0), // negative
+        I = (1 << 2), // disable interrupts
+        D = (1 << 3), // decimal mode
+        B = (1 << 4), // break
+        U = (1 << 5), // unused
+        V = (1 << 6), // overflow
+        N = (1 << 7), // negative
     };
 
     uint8_t a = 0x00; // Accumulator reg

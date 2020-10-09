@@ -89,7 +89,7 @@ uint8_t c6502::ZPX() {
 	addr_abs &= 0x00FF;
 	return 0;
 }
-uint8_t c6502::ZPX() {
+uint8_t c6502::ZPY() {
 	// Zero page Y addressing
 	addr_abs = read(pc + y);
 	pc++;
@@ -138,7 +138,7 @@ uint8_t c6502::IND() {
 	uint16_t ptr = (ihighb << 8) | ilowb;
 	
 	// Simulate a hardware bug
-	if (ilowb = 0x00FF) {
+	if (ilowb == 0x00FF) {
 		addr_abs = (read(ptr & 0xFF00) << 8) | read(ptr);
 	} else {
 		addr_abs = (read(ptr + 1) << 8) | read(ptr);
@@ -172,5 +172,506 @@ uint8_t c6502::REL() {
 	pc++;
 	if (addr_rel & 0x80)
 		addr_rel |= 0xFF00;
+	return 0;
+}
+
+// Instructions
+
+uint8_t c6502::fetch() {
+	// perhaps unecessary to have this if statement?
+	if (!(lookup[opcode].addrmode == &c6502::IMP)) {
+		fetched = read(addr_abs);
+	}
+	return fetched;
+}
+
+uint8_t c6502::AND() {
+	fetch();
+	a |= fetched;
+	SetFlag(Z, a == 0x00);
+	SetFlag(N, a & 0x80);
+	return 1;
+}
+
+void c6502::branch() {
+	cycles++;
+	addr_abs = pc + addr_rel;
+	if ((addr_abs & 0xFF00) != (pc & 0xFF00))
+		cycles++;
+	pc = addr_abs;
+}
+
+uint8_t c6502::BCS() {
+	if (GetFlag(C) == 1) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BCC() {
+	if (GetFlag(C) == 0) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BEQ() {
+	if (GetFlag(Z) == 1) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BNE() {
+	if (GetFlag(Z) == 0) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BMI() {
+	if (GetFlag(N) == 1) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BPL() {
+	if (GetFlag(N) == 0) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BVC() {
+	if (GetFlag(V) == 0) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+uint8_t c6502::BVS() {
+	if (GetFlag(V) == 1) {
+		branch();
+	}
+	// do not return 1, unambigious if new cycles
+	return 0;
+}
+
+uint8_t c6502::CLC() {
+	SetFlag(C, false);
+	return 0;
+}
+uint8_t c6502::CLD() {
+	SetFlag(D, false);
+	return 0;
+}
+uint8_t c6502::CLI() {
+	SetFlag(I, false);
+	return 0;
+}
+uint8_t c6502::CLV() {
+	SetFlag(V, false);
+	return 0;
+}
+uint8_t c6502::SEC() {
+	SetFlag(C, true);
+	return 0;
+}
+uint8_t c6502::SEI() {
+	SetFlag(I, true);
+	return 0;
+}
+uint8_t c6502::SED() {
+	SetFlag(D, true);
+	return 0;
+}
+
+uint8_t c6502::ADC() {
+	fetch();
+	uint16_t temp = (uint16_t)a + (uint16_t)fetched + (uint16_t)GetFlag(C);
+	SetFlag(C, temp > 255);
+	SetFlag(Z, (temp & 0x00FF) == 0);
+	SetFlag(N, temp & 0x80);
+	SetFlag(V, (~((uint16_t)a ^ (uint16_t)fetched) & ((uint16_t)a ^ (uint16_t)temp)) & 0x0080);
+	a = temp & 0x00FF;
+	return 1;
+}
+
+uint8_t c6502::SBC() {
+	fetch();
+	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	uint16_t temp = (uint16_t)a + value + (uint16_t)GetFlag(C);
+	SetFlag(C, temp > 255);
+	SetFlag(Z, (temp & 0x00FF) == 0);
+	SetFlag(N, temp & 0x80);
+	SetFlag(V, (~((uint16_t)a ^ (uint16_t)fetched) & ((uint16_t)a ^ (uint16_t)temp)) & 0x0080);
+	a = temp & 0x00FF;
+	return 1;
+}
+
+uint8_t c6502::PHA() {
+	// Stack resides in 0x0100 to 0x01ff
+	write(0x0100 + stkp, a);
+	stkp--;
+	return 0;
+}
+uint8_t c6502::PLA() {
+	// Stack resides in 0x0100 to 0x01ff
+	stkp++;
+	a = read(0x0100 + stkp);
+	SetFlag(Z, a == 0x00);
+	SetFlag(N, a & 0x80);
+	return 0;
+}
+
+void c6502::reset() {
+	a = 0;
+	x = 0;
+	y = 0;
+	stkp = 0xFD; // shouldnt it be FF?
+	status = 0x00 | U;
+
+	addr_abs = 0xFFFC;
+	uint16_t lo = read(addr_abs + 0);
+	uint16_t hi = read(addr_abs + 1);
+	pc = (hi << 8) | lo;
+
+	addr_rel = 0x0000;
+	addr_abs = 0x0000;
+	fetched = 0x00;
+
+	cycles = 8;
+}
+
+void c6502::irq() {
+	if (GetFlag(I) == 0) {
+		write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+		stkp--;
+		write(0x0100 + stkp, pc & 0x00FF);
+		stkp--;
+
+		SetFlag(B, 0);
+		SetFlag(U, 1);
+		SetFlag(I, 1);
+		write(0x0100 + stkp, status);
+		stkp--;
+
+		addr_abs = 0xFFFE;
+		uint16_t lo = read(addr_abs + 0);
+		uint16_t hi = read(addr_abs + 1);
+		pc = (hi << 8) | lo;
+
+		cycles = 7;
+	}
+}
+
+void c6502::nmi() {
+	write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+	stkp--;
+	write(0x0100 + stkp, pc & 0x00FF);
+	stkp--;
+
+	SetFlag(B, 0);
+	SetFlag(U, 1);
+	SetFlag(I, 1);
+	write(0x0100 + stkp, status);
+	stkp--;
+
+	addr_abs = 0xFFFA;
+	uint16_t lo = read(addr_abs + 0);
+	uint16_t hi = read(addr_abs + 1);
+	pc = (hi << 8) | lo;
+
+	cycles = 8;
+}
+
+uint8_t c6502::RTI() {
+	stkp++;
+	status = read(0x0100 + stkp);
+	status &= ~B;
+	status &= ~U;
+
+	stkp++;
+	pc = (uint16_t)read(0x0100 + stkp);
+	stkp++;
+	pc |= (uint16_t)read(0x0100 + stkp) << 8;
+	return 0;
+}
+
+uint8_t c6502::ASL() {
+	fetch();
+	uint16_t temp = (uint16_t)fetched << 1;
+	SetFlag(C, temp > 255);
+	a = (uint8_t)(temp & 0x00FF);
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 0;
+}
+
+uint8_t c6502::BIT() {
+	fetch();
+	uint8_t temp = a & fetched;
+	SetFlag(Z, temp == 0);
+	SetFlag(V, temp & 0x40);
+	SetFlag(N, temp & 0x80);
+	// Some datasheets say immediate mode should not set V and N. Beware.
+	return 0;
+}
+
+uint8_t c6502::BRK() {
+	SetFlag(B, true);
+	pc++;
+	nmi();
+	return 0;
+}
+
+uint8_t c6502::CMP() {
+	fetch();
+	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	uint16_t temp = (uint16_t)a + value;
+	SetFlag(C, temp > 255);
+	SetFlag(Z, (temp & 0x00FF) == 0);
+	SetFlag(N, temp & 0x80);
+	return 1;
+}
+
+uint8_t c6502::CPX() {
+	fetch();
+	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	uint16_t temp = (uint16_t)x + value;
+	SetFlag(C, temp > 255);
+	SetFlag(Z, (temp & 0x00FF) == 0);
+	SetFlag(N, temp & 0x80);
+	return 1;
+}
+
+uint8_t c6502::CPY() {
+	fetch();
+	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	uint16_t temp = (uint16_t)y + value;
+	SetFlag(C, temp > 255);
+	SetFlag(Z, (temp & 0x00FF) == 0);
+	SetFlag(N, temp & 0x80);
+	return 1;
+}
+
+uint8_t c6502::DEC() {
+	uint8_t temp = read(addr_abs);
+	// not sure if -- will wrap around or not
+	temp--;
+	SetFlag(Z, temp == 0);
+	SetFlag(N, temp & 0x80);
+	write(addr_abs, temp);
+
+	return 0;
+}
+
+uint8_t c6502::EOR() {
+	fetch();
+	a = a ^ fetched;
+	SetFlag(N, a & 0x80);
+	SetFlag(Z, a == 0);
+	return 1;
+}
+
+uint8_t c6502::INC() {
+	uint8_t temp = read(addr_abs);
+	// not sure if ++ will wrap around or not
+	temp++;
+	SetFlag(Z, temp == 0);
+	SetFlag(N, temp & 0x80);
+	write(addr_abs, temp);
+	return 0;
+}
+
+uint8_t c6502::JMP() {
+	fetch();
+	pc = addr_abs;
+	return 0;
+}
+
+uint8_t c6502::JSR() {
+	write(0x0100 + stkp, (uint8_t)(pc >> 8));
+	stkp--;
+	write(0x0100 + stkp, (uint8_t)(pc & 0x00FF));
+	stkp--;
+	pc = addr_abs;
+	return 0;
+}
+
+uint8_t c6502::LDA() {
+	fetch();
+	a = fetched;
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 1;
+}
+
+uint8_t c6502::LDX() {
+	fetch();
+	x = fetched;
+	SetFlag(Z, x == 0);
+	SetFlag(N, x & 0x80);
+	return 1;
+}
+
+uint8_t c6502::LDY() {
+	fetch();
+	y = fetched;
+	SetFlag(Z, y == 0);
+	SetFlag(N, y & 0x80);
+	return 1;
+}
+
+uint8_t c6502::LSR() {
+	// a bit messy, may be good to rewrite later
+	fetch();
+	uint16_t temp = (((uint16_t)fetched & 0x00FF) << 7);
+	SetFlag(C, temp & 0x0080);
+	temp = (temp & 0xFF00) >> 8;
+	uint8_t res = (uint8_t)(temp & 0x00FF);
+	SetFlag(Z, res == 0);
+	SetFlag(N, res & 0x80);
+	write(addr_abs, res);
+	return 0;
+}
+
+uint8_t c6502::NOP() {
+	return 0;
+}
+
+uint8_t c6502::XXX() {
+	return 0;
+}
+
+uint8_t c6502::ORA() {
+	fetch();
+	a = a & fetched;
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 1;
+}
+
+uint8_t c6502::TAX() {
+	x = a;
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 0;
+}
+
+uint8_t c6502::TXA() {
+	a = x;
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 0;
+}
+
+uint8_t c6502::TAY() {
+	y = a;
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 0;
+}
+
+uint8_t c6502::TAY() {
+	a = y;
+	SetFlag(Z, a == 0);
+	SetFlag(N, a & 0x80);
+	return 0;
+}
+
+uint8_t c6502::DEX() {
+	x--;
+	SetFlag(Z, x == 0);
+	SetFlag(N, x & 0x80);
+}
+
+uint8_t c6502::INX() {
+	x++;
+	SetFlag(Z, x == 0);
+	SetFlag(N, x & 0x80);
+}
+
+uint8_t c6502::DEY() {
+	y--;
+	SetFlag(Z, y == 0);
+	SetFlag(N, y & 0x80);
+}
+
+uint8_t c6502::INY() {
+	y++;
+	SetFlag(Z, y == 0);
+	SetFlag(N, y & 0x80);
+}
+
+uint8_t c6502::ROL() {
+	fetch();
+	uint16_t temp = (uint16_t)fetched << 1;
+	temp |= (uint16_t)GetFlag(C);
+	SetFlag(C, temp & 0x0100);
+	uint8_t res = (uint8_t)(temp & 0x00FF);
+	SetFlag(Z, res == 0);
+	SetFlag(N, res & 0x80);
+	write(addr_abs, res);
+	return 0;
+}
+
+uint8_t c6502::ROR() {
+	fetch();
+	uint16_t temp = (uint16_t)fetched << 7;
+	temp |= ((uint16_t)GetFlag(C) << 15);
+	SetFlag(C, temp & 0x0080);
+	uint8_t res = (uint8_t)((temp & 0xFF00) >> 8);
+	SetFlag(Z, res == 0);
+	SetFlag(N, res & 0x80);
+	write(addr_abs, res);
+	return 0;
+}
+
+uint8_t c6502::RTS() {
+	stkp++;
+	uint16_t lo = read(0x0100 + stkp);
+	stkp++;
+	uint16_t hi = read(0x0100 + stkp);
+	pc = (hi << 8) | lo;
+	pc++;
+	return 0;
+}
+
+uint8_t c6502::STA() {
+	write(addr_abs, a);
+	return 0;
+}
+
+uint8_t c6502::TXS() {
+	stkp = x;
+	return 0;
+}
+
+uint8_t c6502::TSX() {
+	x = stkp;
+	return 0;
+}
+
+uint8_t c6502::PHP() {
+	write(0x0100 + stkp, status);
+	stkp--;
+	return 0;
+}
+
+uint8_t c6502::PLP() {
+	stkp++;
+	status = read(0x0100 + stkp);
+	return 0;
+}
+
+uint8_t c6502::STX() {
+	write(addr_abs, x);
+	return 0;
+}
+
+uint8_t c6502::STY() {
+	write(addr_abs, y);
 	return 0;
 }
