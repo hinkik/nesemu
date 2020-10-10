@@ -90,6 +90,7 @@ public:
     // Helper functions
     void branch();
 
+    void step();
     void clock();
     void reset();
     void irq();

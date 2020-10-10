@@ -1,5 +1,6 @@
 #include "c6502.h"
 #include "Bus.h"
+#include <iostream>
 
 c6502::c6502() {
     using a = c6502;
@@ -24,6 +25,8 @@ c6502::c6502() {
 	};
 }
 
+c6502::~c6502() {}
+
 uint8_t c6502::read(uint16_t a) {
     return bus->read(a, false);
 }
@@ -47,6 +50,13 @@ void c6502::clock() {
 	}
 
 	cycles--;
+}
+
+void c6502::step() {
+	opcode = read(pc);
+		pc++;
+		uint8_t additional_cycle1 = (this->*lookup[opcode].addrmode)();
+		uint8_t additional_cycle2 = (this->*lookup[opcode].operate)();
 }
 
 uint8_t c6502::GetFlag(FLAGS6502 f) {
@@ -292,7 +302,7 @@ uint8_t c6502::ADC() {
 	uint16_t temp = (uint16_t)a + (uint16_t)fetched + (uint16_t)GetFlag(C);
 	SetFlag(C, temp > 255);
 	SetFlag(Z, (temp & 0x00FF) == 0);
-	SetFlag(N, temp & 0x80);
+	SetFlag(N, temp & 0x0080);
 	SetFlag(V, (~((uint16_t)a ^ (uint16_t)fetched) & ((uint16_t)a ^ (uint16_t)temp)) & 0x0080);
 	a = temp & 0x00FF;
 	return 1;
@@ -304,7 +314,7 @@ uint8_t c6502::SBC() {
 	uint16_t temp = (uint16_t)a + value + (uint16_t)GetFlag(C);
 	SetFlag(C, temp > 255);
 	SetFlag(Z, (temp & 0x00FF) == 0);
-	SetFlag(N, temp & 0x80);
+	SetFlag(N, temp & 0x0080);
 	SetFlag(V, (~((uint16_t)a ^ (uint16_t)fetched) & ((uint16_t)a ^ (uint16_t)temp)) & 0x0080);
 	a = temp & 0x00FF;
 	return 1;
@@ -420,39 +430,52 @@ uint8_t c6502::BIT() {
 }
 
 uint8_t c6502::BRK() {
-	SetFlag(B, true);
 	pc++;
-	nmi();
+	
+	SetFlag(I, 1);
+	write(0x0100 + stkp, (pc >> 8) & 0x00FF);
+	stkp--;
+	write(0x0100 + stkp, pc & 0x00FF);
+	stkp--;
+
+	SetFlag(B, 1);
+	write(0x0100 + stkp, status);
+	stkp--;
+	SetFlag(B, 0);
+	pc = (uint16_t)read(0xFFFE) | ((uint16_t)read(0xFFFF) << 8);
 	return 0;
 }
 
 uint8_t c6502::CMP() {
 	fetch();
 	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	value++;
 	uint16_t temp = (uint16_t)a + value;
 	SetFlag(C, temp > 255);
 	SetFlag(Z, (temp & 0x00FF) == 0);
-	SetFlag(N, temp & 0x80);
-	return 1;
+	SetFlag(N, temp & 0x0080);
+	return 0;
 }
 
 uint8_t c6502::CPX() {
 	fetch();
 	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	value++;
 	uint16_t temp = (uint16_t)x + value;
 	SetFlag(C, temp > 255);
 	SetFlag(Z, (temp & 0x00FF) == 0);
-	SetFlag(N, temp & 0x80);
-	return 1;
+	SetFlag(N, temp & 0x0080);
+	return 0;
 }
 
 uint8_t c6502::CPY() {
 	fetch();
 	uint16_t value = ((uint16_t)fetched) ^ 0x00FF;
+	value++;
 	uint16_t temp = (uint16_t)y + value;
 	SetFlag(C, temp > 255);
 	SetFlag(Z, (temp & 0x00FF) == 0);
-	SetFlag(N, temp & 0x80);
+	SetFlag(N, temp & 0x0080);
 	return 1;
 }
 
@@ -574,7 +597,7 @@ uint8_t c6502::TAY() {
 	return 0;
 }
 
-uint8_t c6502::TAY() {
+uint8_t c6502::TYA() {
 	a = y;
 	SetFlag(Z, a == 0);
 	SetFlag(N, a & 0x80);
@@ -585,24 +608,28 @@ uint8_t c6502::DEX() {
 	x--;
 	SetFlag(Z, x == 0);
 	SetFlag(N, x & 0x80);
+	return 0;
 }
 
 uint8_t c6502::INX() {
 	x++;
 	SetFlag(Z, x == 0);
 	SetFlag(N, x & 0x80);
+	return 0;
 }
 
 uint8_t c6502::DEY() {
 	y--;
 	SetFlag(Z, y == 0);
 	SetFlag(N, y & 0x80);
+	return 0;
 }
 
 uint8_t c6502::INY() {
 	y++;
 	SetFlag(Z, y == 0);
 	SetFlag(N, y & 0x80);
+	return 0;
 }
 
 uint8_t c6502::ROL() {
@@ -635,7 +662,6 @@ uint8_t c6502::RTS() {
 	stkp++;
 	uint16_t hi = read(0x0100 + stkp);
 	pc = (hi << 8) | lo;
-	pc++;
 	return 0;
 }
 

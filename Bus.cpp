@@ -2,10 +2,13 @@
 
 Bus::Bus() {
     // Maybe clear RAM contents here?
-    // for (auto &i : ram) i = 0x00;
+    for (auto &i : ram) i = 0x00;
 
     cpu.ConnectBus(this);
 }
+
+Bus::~Bus() {}
+
 void Bus::write(uint16_t addr, uint8_t data) {
     if (addr >= 0x0000 && addr <= 0xFFFF) {
         ram[addr] = data;
